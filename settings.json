@@ -1,0 +1,16 @@
+{
+  "lastChangelogVersion": "0.70.6",
+  "defaultProvider": "anthropic",
+  "defaultModel": "claude-opus-4-6",
+  "defaultThinkingLevel": "medium",
+  "enabledModels": [
+    "anthropic/claude-sonnet-4-6",
+    "anthropic/claude-sonnet-4-5-20250929",
+    "anthropic/claude-sonnet-4-5",
+    "anthropic/claude-sonnet-4-20250514"
+  ],
+  "theme": "light",
+  "packages": [
+    "npm:tau-mirror"
+  ]
+}

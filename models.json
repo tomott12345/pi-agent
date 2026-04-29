@@ -1,0 +1,20 @@
+{
+  "providers": {
+    "llama-cpp": {
+      "baseUrl": "http://localhost:8080/v1",
+      "api": "openai-completions",
+      "apiKey": "none",
+      "models": [
+        {
+          "id": "NVIDIA-Nemotron-3-Nano-Omni-30B-A3B-Reasoning-GGUF"
+        },
+        {
+          "id": "Qwen3-8B-Q4_K_M-GGUF"
+        },
+        {
+          "id": "Qwen3.6-35B-A3B-GGUF"
+        }
+      ]
+    }
+  }
+}
