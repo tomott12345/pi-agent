@@ -1,4 +1,5 @@
 auth.json
+models.json
 sessions/
 bin/
 .DS_Store
