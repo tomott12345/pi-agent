@@ -11,7 +11,7 @@ license: MIT
 compatibility: "Linux/macOS (requires Python 3; no external packages needed)"
 metadata:
   author: "Thomas Ott"
-  version: "1.0"
+  version: "1.1"
 ---
 
 # Social Media News Skill
@@ -74,7 +74,29 @@ From the fetch report, choose the **single most compelling story** using these c
 
 ---
 
-### Step 3 — Write the social media post
+### Step 3 — Score the article for marketing spin
+
+Before writing, assess how much of the article is vendor messaging vs. independent reporting.
+Look for these **marketing red flags** in the title, summary, and source:
+
+| Signal | Examples |
+|---|---|
+| Superlative claims | "revolutionary," "industry-leading," "unprecedented," "game-changing," "most powerful ever" |
+| Vague benefit language | "empowers teams," "accelerates innovation," "unlocks potential," "transforms workflows" |
+| No independent voices | Only company executives quoted; no analysts, researchers, or customers |
+| Press-release sourcing | Story originated from a company blog, PR Newswire, BusinessWire, or a vendor's own site |
+| Unverified benchmarks | "X times faster," "Y% more accurate" with no methodology or third-party validation |
+| Missing context | Doesn't mention competitors, limitations, pricing, or what the product actually replaces |
+
+**Assign a spin level:**
+
+- **LOW** — Mostly independent reporting; claims are specific and verifiable; multiple sources cited
+- **MEDIUM** — Mix of real news and vendor framing; some claims lack evidence; single-source story
+- **HIGH** — Predominantly marketing messaging; heavy on adjectives, thin on facts; reads like a press release
+
+---
+
+### Step 4 — Write the social media post
 
 Write **exactly two paragraphs** — no headers, no bullet points, no hashtags unless requested.
 
@@ -84,33 +106,54 @@ Write **exactly two paragraphs** — no headers, no bullet points, no hashtags u
 - Keep it grounded in specifics from the article summary — don't speculate
 - Tone: clear, confident, informative — like a senior engineer summarizing for a colleague
 
-**Paragraph 2 — Why it matters:**
-- Explain the significance: what does this change, enable, or signal?
-- Connect it to a broader trend or implication when relevant
-- End with a forward-looking thought or open question (not a call to action)
-- Tone: thoughtful analysis, not hype
+**Paragraph 2 — Why it matters (adjusted by spin level):**
+
+- **LOW spin:** Explain the significance straight. What does this change, enable, or signal?
+  Connect to a broader trend. End with a forward-looking thought or open question.
+  Tone: thoughtful analysis.
+
+- **MEDIUM spin:** Lead with what's real and verifiable, then flag what's unproven.
+  Use hedging language: *"if the claims hold up,"* *"assuming independent benchmarks confirm,"*
+  *"the company says — though no third-party data is cited yet."*
+  Tone: cautiously optimistic with one raised eyebrow.
+
+- **HIGH spin:** Open paragraph 2 with the skeptical frame — make clear this is
+  vendor-driven messaging before the reader shares it. Call out the specific gap
+  between claim and evidence. It's fine to be wry.
+  Example: *"The announcement reads more like a product brief than a news story —
+  every metric is self-reported and every quote is from inside the company.
+  Worth watching, but take the superlatives with a grain of salt until
+  independent testing catches up."*
+  Tone: candid skepticism without being dismissive.
 
 **After the two paragraphs, on its own line:**
 ```
 🔗 [Article title] — [URL]
 ```
 
-**Total target length:** 120–180 words (excluding the link line).
+If spin level is MEDIUM or HIGH, add a second tag line:
+```
+⚠️ Spin level: [MEDIUM | HIGH] — [one-sentence reason]
+```
+
+**Total target length:** 120–200 words (excluding the link/tag lines).
 
 ---
 
-### Step 4 — Format check
+### Step 5 — Format check
 
 Before presenting, verify:
 - [ ] Exactly two paragraphs
+- [ ] Spin level assessed and paragraph 2 tone matches it
 - [ ] No "In conclusion" or "In summary" openers
 - [ ] No rhetorical questions as openers
 - [ ] The link line uses the actual article title and full URL from the fetch report
 - [ ] No invented facts — every claim is traceable to the fetch report summary
+- [ ] ⚠️ tag line present if spin level is MEDIUM or HIGH
 
 ---
 
-### Example output format
+### Example output — LOW spin
 
 > OpenAI has announced that its models are now available through Amazon Bedrock, making
 > GPT-4o and o3 accessible directly within AWS infrastructure. The partnership gives
@@ -125,6 +168,24 @@ Before presenting, verify:
 > between model providers just dropped significantly.
 
 🔗 OpenAI models coming to Amazon Bedrock — https://stratechery.com/...
+
+---
+
+### Example output — HIGH spin
+
+> Acme AI has announced Nexus 3.0, a new enterprise platform it claims delivers
+> "10× faster inference" and "industry-leading accuracy across every major benchmark."
+> The announcement comes via the company's own blog; no independent testing or
+> third-party validation is cited anywhere in the piece.
+>
+> The underlying capability — faster model serving at lower cost — is a real and
+> competitive space, so there may be something genuine here. But this reads almost
+> entirely as a press release: every quote is from Acme's own executives, the
+> benchmark methodology is undisclosed, and "industry-leading" appears four times
+> in three paragraphs. Wait for independent reviews before drawing conclusions.
+
+🔗 Acme AI Launches Nexus 3.0 — https://acme.ai/blog/nexus-3
+⚠️ Spin level: HIGH — all claims are self-reported; no third-party sources or benchmark methodology cited
 
 ---
 
