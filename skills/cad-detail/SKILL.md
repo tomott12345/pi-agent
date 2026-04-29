@@ -183,13 +183,13 @@ print(f'Saved: {path}')
 Position geometry so it occupies 65–75% of the usable area (inside border,
 above title block), centred left-to-right.
 
-**Text height reference (dxf_base constants):**
+**Text height reference (dxf_base constants — Leroy standard, inches):**
 
-| Constant | Value | Use |
-|---|---|---|
-| `TEXT_HEIGHT` | 1.2 | All labels, notes, dimension text (default) |
-| `TITLE_HEIGHT` | 1.8 | Detail title in title block |
-| `SMALL_HEIGHT` | 0.9 | Secondary notes, drawn-by field |
+| Constant | Value | Leroy size | Use |
+|---|---|---|---|
+| `TEXT_HEIGHT` | 0.12 | No. 120 | All labels, notes, dimension text (default) |
+| `TITLE_HEIGHT` | 0.24 | No. 240 | Detail title in title block |
+| `SMALL_HEIGHT` | 0.08 | No. 80 | Secondary notes, drawn-by field |
 
 ### Step 4 — Execute and report
 

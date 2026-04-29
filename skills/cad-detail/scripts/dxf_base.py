@@ -36,14 +36,14 @@ OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 # Global standards
 # ---------------------------------------------------------------------------
 
-TEXT_HEIGHT  = 1.2        # standard text height in drawing units (RomanS, 1:1)
-TITLE_HEIGHT = 1.8        # larger text for detail titles in title block
-SMALL_HEIGHT = 0.9        # smaller text for secondary notes
-ARROW_SIZE   = 1.8        # dimension arrowhead size (≈ 1.5× text height)
-DIM_GAP      = 0.6        # gap between extension line origin and measured point
-DIM_EXT      = 1.2        # extension line beyond dimension line
-DIM_OFFSET   = 0.6        # extension line origin offset from measured point
-ROMANS_FONT  = "romans.shx"   # AutoCAD LT RomanS SHX font filename
+TEXT_HEIGHT  = 0.12       # Leroy No. 120 — standard engineering notes (Romans, 1:1)
+TITLE_HEIGHT = 0.24       # Leroy No. 240 — detail title in title block
+SMALL_HEIGHT = 0.08       # Leroy No. 80  — secondary notes / drawn-by field
+ARROW_SIZE   = 0.18       # dimension arrowhead size (1.5× TEXT_HEIGHT)
+DIM_GAP      = 0.06       # gap between dim line and text (0.5× TEXT_HEIGHT)
+DIM_EXT      = 0.12       # extension line beyond dimension line
+DIM_OFFSET   = 0.06       # extension line origin offset from measured point
+ROMANS_FONT  = "romans.shx"   # AutoCAD LT Romans SHX font filename
 
 # ---------------------------------------------------------------------------
 # Standard layer definitions
