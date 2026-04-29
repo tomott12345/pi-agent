@@ -1,11 +1,19 @@
 """
 dxf_base.py — standard CAD document setup for the cad-detail skill.
 
+Standards enforced:
+  - All geometry drawn at 1:1 (real-world dimensions)
+  - Text style: RomanS (romans.shx) — AutoCAD LT compatible SHX font
+  - Default text height: 1.2 drawing units
+  - Dimension style: CADD standard, ROMANS style, 1.2 text height
+  - Layers: OUTLINE, HIDDEN, CENTER, DIMENSION, TEXT, HATCH, DETAIL,
+            CONSTRUCTION, TITLE, BORDER
+
 Usage:
     from dxf_base import new_doc, save_doc, HATCH, add_linear_dim, add_radius_dim
 
-    doc, msp = new_doc(units="mm", title="BEAM CONNECTION")
-    # ... draw geometry on msp ...
+    doc, msp = new_doc(units="in")          # or "mm"
+    # ... draw geometry on msp at real-world size (1:1) ...
     path = save_doc(doc, "beam_connection")
 """
 
@@ -24,6 +32,18 @@ from ezdxf import enums as dxf_enums
 OUTPUT_DIR = Path.home() / "Documents" / "CAD"
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
+# ---------------------------------------------------------------------------
+# Global standards
+# ---------------------------------------------------------------------------
+
+TEXT_HEIGHT  = 1.2        # standard text height in drawing units (RomanS, 1:1)
+TITLE_HEIGHT = 1.8        # larger text for detail titles in title block
+SMALL_HEIGHT = 0.9        # smaller text for secondary notes
+ARROW_SIZE   = 1.8        # dimension arrowhead size (≈ 1.5× text height)
+DIM_GAP      = 0.6        # gap between extension line origin and measured point
+DIM_EXT      = 1.2        # extension line beyond dimension line
+DIM_OFFSET   = 0.6        # extension line origin offset from measured point
+ROMANS_FONT  = "romans.shx"   # AutoCAD LT RomanS SHX font filename
 
 # ---------------------------------------------------------------------------
 # Standard layer definitions
@@ -31,18 +51,17 @@ OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
 LAYERS = {
     # name            color  linetype      lineweight (100ths of mm)
-    "OUTLINE":        (7,    "Continuous",  50),   # main object lines
-    "HIDDEN":         (3,    "HIDDEN",      25),   # hidden / dashed lines
-    "CENTER":         (1,    "CENTER",      18),   # centerlines
-    "DIMENSION":      (2,    "Continuous",  18),   # dimensions
-    "TEXT":           (7,    "Continuous",  18),   # notes and labels
-    "HATCH":          (253,  "Continuous",   9),   # section hatching
-    "DETAIL":         (4,    "Continuous",  35),   # secondary object geometry
-    "CONSTRUCTION":   (8,    "Continuous",   9),   # construction / reference lines
-    "TITLE":          (7,    "Continuous",  25),   # title block text
-    "BORDER":         (7,    "Continuous",  70),   # sheet border
+    "OUTLINE":        (7,    "Continuous",  50),   # main object lines — white/black
+    "HIDDEN":         (3,    "HIDDEN",      25),   # hidden / dashed lines — green
+    "CENTER":         (1,    "CENTER",      18),   # centerlines — red
+    "DIMENSION":      (2,    "Continuous",  18),   # dimensions — yellow
+    "TEXT":           (7,    "Continuous",  18),   # notes and labels — white/black
+    "HATCH":          (253,  "Continuous",   9),   # section hatching — grey
+    "DETAIL":         (4,    "Continuous",  35),   # secondary object geometry — cyan
+    "CONSTRUCTION":   (8,    "Continuous",   9),   # construction / reference lines — grey
+    "TITLE":          (7,    "Continuous",  25),   # title block text — white/black
+    "BORDER":         (7,    "Continuous",  70),   # sheet border — white/black
 }
-
 
 # ---------------------------------------------------------------------------
 # Hatch pattern reference
@@ -66,18 +85,18 @@ class HATCH:
     INSULATION    = "INSUL"    # batt insulation
     WOOD_END      = "ANSI31"   # end grain — same as steel but smaller scale
     WOOD_LONG     = "ANSI32"   # longitudinal grain
-    CROSS         = "CROSS"    # general crosshatch
+    CROSS         = "CROSS"
     DOTS          = "DOTS"
 
-    # Recommended scale values for architectural details (units = mm)
+    # Recommended scale values (units = drawing units at 1:1)
     SCALE = {
-        "ANSI31":   2.5,   # steel section — fine
-        "ANSI32":   2.5,
-        "AR-CONC":  0.5,   # concrete aggregate — keep small
-        "AR-BRSTD": 1.0,
-        "EARTH":    1.5,
-        "GRAVEL":   1.0,
-        "INSUL":    2.0,
+        "ANSI31":   0.10,   # steel section — fine
+        "ANSI32":   0.10,
+        "AR-CONC":  0.02,   # concrete aggregate
+        "AR-BRSTD": 0.04,
+        "EARTH":    0.06,
+        "GRAVEL":   0.04,
+        "INSUL":    0.08,
     }
 
 
@@ -88,72 +107,86 @@ class HATCH:
 UNIT_CODES = {"in": 1, "ft": 2, "mm": 4, "cm": 5, "m": 6}
 
 
-def new_doc(units: str = "mm", title: Optional[str] = None) -> tuple:
+def new_doc(units: str = "in", title: Optional[str] = None) -> tuple:
     """
-    Create a new DXF R2010 document with standard layers, linetypes,
-    and a dimension style calibrated for the chosen units.
+    Create a new DXF R2010 document with:
+      - RomanS (romans.shx) text style
+      - Standard layers and linetypes
+      - CADD dimension style calibrated to TEXT_HEIGHT = 1.2 at 1:1 scale
+
+    Args:
+        units: "in" (inches, default) or "mm"
+        title: optional detail title stored in header
 
     Returns:
         (doc, msp) — the document and its modelspace.
     """
     doc = ezdxf.new("R2010")
-    doc.units = UNIT_CODES.get(units, 4)
+    doc.units = UNIT_CODES.get(units, 1)
+    doc.header["$INSUNITS"] = UNIT_CODES.get(units, 1)
+    doc.header["$ACADVER"]  = "AC1024"  # R2010
 
-    # Store metadata
-    doc.header["$INSUNITS"] = UNIT_CODES.get(units, 4)
-    if title:
-        doc.header["$ACADVER"] = "AC1024"  # R2010
+    # --- Text style: RomanS ---
+    _setup_text_style(doc)
 
     # --- Linetypes ---
-    if units == "mm":
-        scale = 1.0
-    elif units == "in":
-        scale = 1 / 25.4
-    else:
-        scale = 1.0
-
-    doc.linetypes.add("HIDDEN",  pattern=[6 * scale, -3 * scale])
-    doc.linetypes.add("CENTER",  pattern=[20 * scale, -5 * scale, 5 * scale, -5 * scale])
-    doc.linetypes.add("PHANTOM", pattern=[25 * scale, -5 * scale, 5 * scale, -5 * scale, 5 * scale, -5 * scale])
-    doc.linetypes.add("DASHDOT", pattern=[15 * scale, -5 * scale, 0, -5 * scale])
+    # Scale dash/gap patterns to drawing units
+    s = 1.0 if units == "mm" else (1 / 25.4)
+    doc.linetypes.add("HIDDEN",  pattern=[6 * s, -3 * s])
+    doc.linetypes.add("CENTER",  pattern=[20 * s, -5 * s, 5 * s, -5 * s])
+    doc.linetypes.add("PHANTOM", pattern=[25 * s, -5 * s, 5 * s, -5 * s, 5 * s, -5 * s])
+    doc.linetypes.add("DASHDOT", pattern=[15 * s, -5 * s, 0, -5 * s])
 
     # --- Layers ---
     for name, (color, linetype, lw) in LAYERS.items():
-        if linetype != "Continuous" and linetype not in [lt.dxf.name for lt in doc.linetypes]:
-            linetype = "Continuous"
-        doc.layers.add(name, dxfattribs={"color": color, "linetype": linetype, "lineweight": lw})
+        lt = linetype
+        if lt != "Continuous" and lt not in [l.dxf.name for l in doc.linetypes]:
+            lt = "Continuous"
+        doc.layers.add(name, dxfattribs={"color": color, "linetype": lt, "lineweight": lw})
 
     # --- Dimension style ---
-    _setup_dimstyle(doc, units)
+    _setup_dimstyle(doc)
 
     return doc, doc.modelspace()
 
 
-def _setup_dimstyle(doc, units: str) -> None:
-    """Configure a dimension style appropriate for the unit system."""
-    if units == "mm":
-        arrow_size = 3.5
-        text_height = 3.5
-        offset = 2.0
-        ext_beyond = 2.0
-        ext_offset = 1.5
-    else:  # inches
-        arrow_size = 0.125
-        text_height = 0.125
-        offset = 0.0625
-        ext_beyond = 0.0625
-        ext_offset = 0.0625
+def _setup_text_style(doc) -> None:
+    """
+    Configure the Standard text style to use RomanS (romans.shx).
+    Also registers a named 'ROMANS' style for explicit assignment.
+    """
+    # Update the built-in Standard style
+    try:
+        standard = doc.styles.get("Standard")
+        standard.dxf.font    = ROMANS_FONT
+        standard.dxf.bigfont = ""
+        standard.dxf.height  = 0   # 0 = height set per entity
+    except Exception:
+        pass
 
+    # Named style for explicit use in dimensions and text entities
+    try:
+        doc.styles.add("ROMANS", font=ROMANS_FONT)
+    except ezdxf.DXFTableEntryError:
+        pass  # already exists
+
+
+def _setup_dimstyle(doc) -> None:
+    """
+    Configure the Standard dimension style for 1:1 drawing with
+    TEXT_HEIGHT = 1.2, RomanS font, CADD-standard proportions.
+    """
     ds = doc.dimstyles.get("Standard")
-    ds.dxf.dimasz  = arrow_size
-    ds.dxf.dimtxt  = text_height
-    ds.dxf.dimdle  = 0
-    ds.dxf.dimexe  = ext_beyond
-    ds.dxf.dimexo  = ext_offset
-    ds.dxf.dimgap  = offset
-    ds.dxf.dimclrd = 2   # dimension line: yellow
-    ds.dxf.dimclre = 2   # extension line: yellow
-    ds.dxf.dimclrt = 2   # text: yellow
+    ds.dxf.dimasz  = ARROW_SIZE    # arrowhead size
+    ds.dxf.dimtxt  = TEXT_HEIGHT   # dimension text height
+    ds.dxf.dimdle  = 0             # dimension line extension past ext lines
+    ds.dxf.dimexe  = DIM_EXT       # extension line beyond dim line
+    ds.dxf.dimexo  = DIM_OFFSET    # extension line offset from point
+    ds.dxf.dimgap  = DIM_GAP       # gap between dim line and text
+    ds.dxf.dimclrd = 2             # dimension line color: yellow (layer 2)
+    ds.dxf.dimclre = 2             # extension line color: yellow
+    ds.dxf.dimclrt = 2             # text color: yellow
+    ds.dxf.dimtxsty = "ROMANS"     # RomanS text style for all dim text
 
 
 # ---------------------------------------------------------------------------
@@ -170,22 +203,21 @@ def add_linear_dim(
     override: Optional[dict] = None,
 ) -> None:
     """
-    Add a linear dimension.
+    Add a linear dimension at 1:1 scale.
 
     Args:
-        p1, p2:  measurement points
-        offset:  perpendicular distance from p1/p2 to the dimension line
-                 (negative = below/left)
-        angle:   0 = horizontal, 90 = vertical
+        p1, p2:  measurement points (real-world coordinates)
+        offset:  perpendicular distance from measured geometry to dim line
+                 (positive = above/right, negative = below/left)
+        angle:   0 = horizontal dimension, 90 = vertical dimension
     """
-    attrs = {"layer": layer}
     if angle == 0:
         base = ((p1[0] + p2[0]) / 2, p1[1] + offset)
     elif angle == 90:
         base = (p1[0] + offset, (p1[1] + p2[1]) / 2)
     else:
-        # General case: offset perpendicular to measurement direction
-        dx, dy = math.cos(math.radians(angle + 90)), math.sin(math.radians(angle + 90))
+        dx = math.cos(math.radians(angle + 90))
+        dy = math.sin(math.radians(angle + 90))
         mx, my = (p1[0] + p2[0]) / 2, (p1[1] + p2[1]) / 2
         base = (mx + offset * dx, my + offset * dy)
 
@@ -196,7 +228,7 @@ def add_linear_dim(
         angle=angle,
         dimstyle="Standard",
         override=override,
-        dxfattribs=attrs,
+        dxfattribs={"layer": layer},
     )
     dim.render()
 
@@ -250,7 +282,7 @@ def add_centerlines(msp, center: tuple, size: float, layer: str = "CENTER") -> N
 
 def add_hatch_region(
     msp,
-    boundary: list[tuple],
+    boundary: list,
     pattern: str = HATCH.STEEL,
     scale: Optional[float] = None,
     angle: float = 0,
@@ -260,13 +292,13 @@ def add_hatch_region(
     Hatch a closed polygonal region.
 
     Args:
-        boundary: list of (x, y) vertices (open or closed — auto-closed)
+        boundary: list of (x, y) vertices
         pattern:  hatch pattern name (use HATCH.* constants)
-        scale:    pattern scale; defaults to HATCH.SCALE table or 2.5
+        scale:    pattern scale; if None, uses HATCH.SCALE table default
         angle:    rotation of hatch pattern in degrees
     """
     if scale is None:
-        scale = HATCH.SCALE.get(pattern, 2.5)
+        scale = HATCH.SCALE.get(pattern, 0.10)
     h = msp.add_hatch(dxfattribs={"layer": layer})
     h.paths.add_polyline_path(boundary, is_closed=True)
     h.set_pattern_fill(pattern, scale=scale, angle=angle)
@@ -276,37 +308,68 @@ def add_label(
     msp,
     text: str,
     position: tuple,
-    height: float = 3.5,
+    height: float = TEXT_HEIGHT,
     align: str = "MIDDLE_CENTER",
     layer: str = "TEXT",
     rotation: float = 0,
 ) -> None:
-    """Add a text label at the given position."""
-    alignment = getattr(dxf_enums.TextEntityAlignment, align, dxf_enums.TextEntityAlignment.LEFT)
+    """
+    Add a text label using RomanS font at TEXT_HEIGHT (1.2).
+
+    Args:
+        text:     string to display
+        position: (x, y) insertion point
+        height:   text height in drawing units (default: 1.2)
+        align:    ezdxf TextEntityAlignment name (default: MIDDLE_CENTER)
+        layer:    target layer (default: TEXT)
+        rotation: text rotation in degrees
+    """
+    alignment = getattr(
+        dxf_enums.TextEntityAlignment,
+        align,
+        dxf_enums.TextEntityAlignment.MIDDLE_CENTER,
+    )
     msp.add_text(
         text,
-        dxfattribs={"height": height, "layer": layer, "rotation": rotation},
+        dxfattribs={
+            "height":   height,
+            "layer":    layer,
+            "rotation": rotation,
+            "style":    "ROMANS",
+        },
     ).set_placement(position, align=alignment)
 
 
 def add_leader(
     msp,
-    vertices: list[tuple],
+    vertices: list,
     annotation: str,
-    text_height: float = 3.0,
+    text_height: float = TEXT_HEIGHT,
     layer: str = "DIMENSION",
 ) -> None:
-    """Add a leader line with annotation text at the last vertex."""
+    """
+    Add a leader line with annotation text at the last vertex.
+
+    Args:
+        vertices:    list of (x, y) points; arrowhead at first point
+        annotation:  callout string
+        text_height: annotation text height (default: 1.2)
+    """
     for i in range(len(vertices) - 1):
         msp.add_line(vertices[i], vertices[i + 1], dxfattribs={"layer": layer})
-    # Small arrow head at the start
-    msp.add_line(vertices[0], vertices[1], dxfattribs={"layer": layer})
-    # Text at the end
     end = vertices[-1]
+    offset = text_height * 0.5
     msp.add_text(
         annotation,
-        dxfattribs={"height": text_height, "layer": "TEXT"},
-    ).set_placement((end[0] + 2, end[1]), align=dxf_enums.TextEntityAlignment.MIDDLE_LEFT)
+        dxfattribs={
+            "height": text_height,
+            "layer":  "TEXT",
+            "style":  "ROMANS",
+        },
+    ).set_placement(
+        (end[0] + offset, end[1]),
+        align=dxf_enums.TextEntityAlignment.MIDDLE_LEFT,
+    )
 
 
 def add_border_and_title(
@@ -314,21 +377,24 @@ def add_border_and_title(
     width: float,
     height: float,
     title: str,
-    scale: str = "1:10",
+    scale: str = "1:1",
     drawn_by: str = "",
-    units: str = "mm",
+    units: str = "in",
 ) -> None:
     """
-    Add a simple title block and border.
+    Add a sheet border and simple title block using RomanS text.
 
     Args:
-        width, height: sheet extents in drawing units
-        title:         detail title
-        scale:         e.g. "1:10"
+        width, height: sheet extents in drawing units (1:1, real size)
+        title:         detail title (shown in upper-case)
+        scale:         plot scale string, default "1:1"
+        drawn_by:      drafter initials or name (optional)
+        units:         "in" or "mm" — controls margin sizes
     """
-    m = 10 if units == "mm" else 0.5  # margin
+    m     = 0.5  if units == "in" else 13.0   # margin
+    box_h = 0.75 if units == "in" else 19.0   # title box height
 
-    # Border
+    # Outer border
     msp.add_lwpolyline(
         [(m, m), (width - m, m), (width - m, height - m), (m, height - m)],
         close=True,
@@ -336,27 +402,42 @@ def add_border_and_title(
     )
 
     # Title box at bottom
-    box_h = 20 if units == "mm" else 0.75
     msp.add_lwpolyline(
         [(m, m), (width - m, m), (width - m, m + box_h), (m, m + box_h)],
         close=True,
         dxfattribs={"layer": "BORDER"},
     )
-    # Vertical divider
-    mid_x = width * 0.6
+
+    # Vertical divider at 60% of width
+    mid_x = m + (width - 2 * m) * 0.60
     msp.add_line((mid_x, m), (mid_x, m + box_h), dxfattribs={"layer": "BORDER"})
 
-    text_h = 4.5 if units == "mm" else 0.18
-    small_h = 3.0 if units == "mm" else 0.12
-    cy = m + box_h / 2
+    cy = m + box_h / 2   # vertical centre of title box
 
-    add_label(msp, title.upper(),  (m + (mid_x - m) / 2, cy + 2),
-              height=text_h, layer="TITLE")
-    add_label(msp, f"SCALE: {scale}", (mid_x + (width - m - mid_x) / 2, cy + 3),
-              height=small_h, layer="TITLE")
+    # Detail title — left cell, TITLE_HEIGHT
+    add_label(
+        msp, title.upper(),
+        (m + (mid_x - m) / 2, cy + TEXT_HEIGHT * 0.4),
+        height=TITLE_HEIGHT,
+        layer="TITLE",
+    )
+
+    # Scale — right cell, TEXT_HEIGHT
+    add_label(
+        msp, f"SCALE: {scale}",
+        (mid_x + (width - m - mid_x) / 2, cy + TEXT_HEIGHT * 0.5),
+        height=TEXT_HEIGHT,
+        layer="TITLE",
+    )
+
+    # Drafter — right cell, SMALL_HEIGHT
     if drawn_by:
-        add_label(msp, f"BY: {drawn_by}", (mid_x + (width - m - mid_x) / 2, cy - 3),
-                  height=small_h, layer="TITLE")
+        add_label(
+            msp, f"BY: {drawn_by}",
+            (mid_x + (width - m - mid_x) / 2, cy - TEXT_HEIGHT * 0.5),
+            height=SMALL_HEIGHT,
+            layer="TITLE",
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -365,21 +446,18 @@ def add_border_and_title(
 
 def save_doc(doc, filename: str, output_dir: Optional[str] = None) -> str:
     """
-    Save the DXF document.
+    Save the DXF document to ~/Documents/CAD/ (or a custom directory).
 
     Args:
         filename:   base name without extension (e.g. "beam_connection")
-        output_dir: directory to save in; defaults to ~/Documents/CAD/
+        output_dir: override output directory (optional)
 
     Returns:
         Absolute path of the saved file.
     """
     out = Path(output_dir) if output_dir else OUTPUT_DIR
     out.mkdir(parents=True, exist_ok=True)
-
-    # Sanitize filename
-    safe = "".join(c if c.isalnum() or c in "-_" else "_" for c in filename)
-    path = out / f"{safe}.dxf"
-
+    safe  = "".join(c if c.isalnum() or c in "-_" else "_" for c in filename)
+    path  = out / f"{safe}.dxf"
     doc.saveas(str(path))
     return str(path)

@@ -11,7 +11,7 @@ license: MIT
 compatibility: "Linux/macOS (requires Python 3 and ezdxf: pip install ezdxf)"
 metadata:
   author: "Thomas Ott"
-  version: "1.0"
+  version: "1.1"
 ---
 
 # CAD Detail Skill
@@ -20,8 +20,13 @@ metadata:
 
 Parses a plain-language description of a detail, deduces the geometry, and writes
 a Python script using `ezdxf` and the helper module `scripts/dxf_base.py` to
-produce a DXF file importable into AutoCAD, BricsCAD, LibreCAD, or any DXF-compatible
-CAD application.
+produce a DXF file importable into AutoCAD LT or any DXF-compatible CAD application.
+
+**Drawing standards enforced automatically by `dxf_base.py`:**
+- All geometry drawn at **1:1 scale** (real-world dimensions in inches or mm)
+- **RomanS font** (`romans.shx`) on all text, labels, and dimension annotations
+- **Text height: 1.2** drawing units on all text entities and dimensions
+- Standard CADD layers with correct colors, linetypes, and lineweights
 
 Output files are saved to `~/Documents/CAD/<detail_name>.dxf`.
 
@@ -55,15 +60,16 @@ Read the description and identify:
 2. **Primary material(s)** — steel, concrete, wood, masonry, aluminum, etc.
 3. **Components** — list every physical element mentioned
 4. **Key dimensions** — extract all given dimensions; estimate reasonable values for any that are standard but not stated
-5. **Unit system** — metric (mm) or imperial (inches); default to mm if unspecified
-6. **Scale** — choose an appropriate drawing scale based on the overall size:
-   - Small details (<200mm): 1:5 or 1:2
-   - Medium (200–500mm): 1:10
-   - Large (>500mm): 1:20 or 1:50
-7. **Datum / origin** — place the primary element at or near (0, 0) for clarity
+5. **Unit system** — metric (mm) or imperial (inches); default to **inches** if unspecified. Pass `units='in'` or `units='mm'` to `new_doc()`.
+6. **Scale** — always **1:1**. Draw every entity at its true real-world dimension. Do not apply any scale factor to geometry. The title block will read `SCALE: 1:1`.
+7. **Sheet size** — choose a standard sheet size in the same drawing units:
+   - Imperial (inches): 11 × 8.5 (letter), 17 × 11 (tabloid), 22 × 17 (C-size)
+   - Metric (mm): 297 × 210 (A4), 420 × 297 (A3), 594 × 420 (A2)
+   - Pick the smallest sheet that gives comfortable white space around the geometry
+8. **Datum / origin** — place the primary element at or near (0, 0) for clarity; leave room above for the geometry and at the bottom for the title block
 
 Before writing any code, briefly state what you understood:
-> "Drawing: [component list], units: mm, scale: 1:10, origin: centre of column base"
+> "Drawing: [component list], units: in, scale: 1:1, sheet: 11×8.5, origin: centre of plate"
 
 ### Step 2 — Plan the geometry
 
@@ -92,24 +98,28 @@ Map each component to DXF entity types:
 - Secondary/background geometry → `DETAIL`
 
 **Hatch patterns:**
-| Material | Pattern | Scale (mm) |
-|---|---|---|
-| Steel plate / metal section | `HATCH.STEEL` ("ANSI31") | 2.5 |
-| Concrete (cast-in-place) | `HATCH.CONCRETE` ("AR-CONC") | 0.5 |
-| Brick / CMU | `HATCH.BRICK` ("AR-BRSTD") | 1.0 |
-| Earth / compacted fill | `HATCH.EARTH` | 1.5 |
-| Gravel / crushed stone | `HATCH.GRAVEL` | 1.0 |
-| Batt insulation | `HATCH.INSULATION` ("INSUL") | 2.0 |
-| Wood (end grain) | `HATCH.STEEL` | 1.5 (45°, fine) |
-| Wood (long grain) | two parallel lines spaced ~5mm | — |
-| Aluminum | `HATCH.ALUMINUM` ("ANSI38") | 2.5 |
+| Material | Pattern | Auto scale | Notes |
+|---|---|---|---|
+| Steel plate / metal section | `HATCH.STEEL` | 0.10 | 45° lines |
+| Concrete (cast-in-place) | `HATCH.CONCRETE` | 0.02 | AR-CONC aggregate |
+| Brick / CMU | `HATCH.BRICK` | 0.04 | AR-BRSTD |
+| Earth / compacted fill | `HATCH.EARTH` | 0.06 | |
+| Gravel / crushed stone | `HATCH.GRAVEL` | 0.04 | |
+| Batt insulation | `HATCH.INSULATION` | 0.08 | |
+| Wood (end grain) | `HATCH.STEEL` | 0.06 | use `angle=45` |
+| Wood (long grain) | two parallel lines spaced to suit | — | draw manually |
+| Aluminum | `HATCH.ALUMINUM` | 0.10 | ANSI38 |
 
-**Dimension placement:**
-- Place dimension lines 15–20mm outside the nearest outline
-- Stack multiple dimensions 15mm apart
-- Use `add_linear_dim(msp, p1, p2, offset)` where `offset` is signed distance from p1/p2 to the dim line
-  - Negative offset → below or left of geometry
-  - Positive offset → above or right
+Scale defaults are set in `HATCH.SCALE` and applied automatically when `scale=None`.
+Override with `add_hatch_region(msp, boundary, HATCH.CONCRETE, scale=0.03)` if needed.
+
+**Dimension placement (1:1, inches):**
+- Place dimension lines 0.4–0.6 in. outside the nearest outline
+- Stack multiple dimensions 0.4 in. apart
+- Use `add_linear_dim(msp, p1, p2, offset)` where `offset` is signed distance:
+  - Negative → below or left of geometry
+  - Positive → above or right
+- For mm drawings, use 10–15 mm offsets instead
 
 ### Step 3 — Write the Python script
 
@@ -122,11 +132,18 @@ import sys
 sys.path.insert(0, '/Users/ottt/.pi/agent/skills/cad-detail/scripts')
 from dxf_base import *
 
-# Document setup
-doc, msp = new_doc(units='mm')  # or 'in' for imperial
+# ── DOCUMENT SETUP ──────────────────────────────────────────────────────────
+# units='in' (default) or 'mm'
+# All standards applied automatically: RomanS font, 1.2 text height, 1:1 scale
+doc, msp = new_doc(units='in')
+
+# Sheet size in drawing units (real-world, 1:1)
+sheet_w, sheet_h = 11, 8.5   # e.g. ANSI A letter in inches
 
 # ── GEOMETRY ────────────────────────────────────────────────────────────────
-# Draw components from bottom to top, back to front.
+# Draw all components at TRUE real-world dimensions (1:1).
+# No scale factors — if a plate is 6 inches wide, coordinates span 6 units.
+# Draw from bottom to top, back to front.
 # Add hatching immediately after the outline for each material region.
 
 # ... geometry code ...
@@ -134,30 +151,45 @@ doc, msp = new_doc(units='mm')  # or 'in' for imperial
 # ── DIMENSIONS ──────────────────────────────────────────────────────────────
 # Add all key dimensions. Minimum: overall width, overall height,
 # and any critical sub-dimensions (spacing, thickness, cover, etc.)
+# Offset = distance from geometry to dimension line in drawing units.
+# Typical offset for inches: 0.4 to 0.6; for mm: 10 to 15.
 
 # ... dimension code ...
 
 # ── ANNOTATIONS ─────────────────────────────────────────────────────────────
-# Add material callouts, part labels, and a detail title.
+# add_label() and add_leader() use RomanS font and TEXT_HEIGHT (1.2) by default.
+# Pass height=TITLE_HEIGHT (1.8) for prominent callouts if needed.
 
 # ... label code ...
 
 # ── TITLE BLOCK ─────────────────────────────────────────────────────────────
-add_border_and_title(msp, sheet_w, sheet_h, 'DETAIL TITLE', scale='1:10')
+# scale is always '1:1' — do not change this
+add_border_and_title(msp, sheet_w, sheet_h, 'DETAIL TITLE', scale='1:1', units='in')
 
 # ── SAVE ────────────────────────────────────────────────────────────────────
 path = save_doc(doc, 'detail_filename')
 print(f'Saved: {path}')
 ```
 
-**Sheet size guidelines (mm):**
-- Small detail: 250 × 200
-- Medium detail: 350 × 280
-- Large detail: 500 × 400
-- Extra large: 700 × 500
+**Standard sheet sizes:**
 
-Position geometry so it occupies roughly 70% of the sheet,
-centred between the border and title block.
+| Sheet | Imperial (in) | Metric (mm) |
+|---|---|---|
+| Small | 11 × 8.5 (letter) | 297 × 210 (A4) |
+| Medium | 17 × 11 (tabloid) | 420 × 297 (A3) |
+| Large | 22 × 17 (C-size) | 594 × 420 (A2) |
+| Extra large | 34 × 22 (D-size) | 841 × 594 (A1) |
+
+Position geometry so it occupies 65–75% of the usable area (inside border,
+above title block), centred left-to-right.
+
+**Text height reference (dxf_base constants):**
+
+| Constant | Value | Use |
+|---|---|---|
+| `TEXT_HEIGHT` | 1.2 | All labels, notes, dimension text (default) |
+| `TITLE_HEIGHT` | 1.8 | Detail title in title block |
+| `SMALL_HEIGHT` | 0.9 | Secondary notes, drawn-by field |
 
 ### Step 4 — Execute and report
 
@@ -182,61 +214,74 @@ modify the script and regenerate the DXF. Offer to:
 
 ## Common detail patterns
 
-### Steel connection (shear tab / clip angle)
+All examples use inches at 1:1 scale. For mm, multiply inch values by 25.4
+and pass `units='mm'` to `new_doc()`.
+
+### Steel connection (shear tab / clip angle) — imperial
 ```python
-# Column flange
-msp.add_lwpolyline([(-15, 0),(-15, 300),(15, 300),(15, 0)], close=True, dxfattribs={'layer':'OUTLINE'})
-add_hatch_region(msp, [(-15,0),(-15,300),(15,300),(15,0)], HATCH.STEEL)
+# Column flange  (W-shape flange represented as a rectangle, 0.6" thick × 12" tall)
+msp.add_lwpolyline([(-0.6,0),(-0.6,12),(0.6,12),(0.6,0)], close=True, dxfattribs={'layer':'OUTLINE'})
+add_hatch_region(msp, [(-0.6,0),(-0.6,12),(0.6,12),(0.6,0)], HATCH.STEEL)
 
-# Shear plate
-msp.add_lwpolyline([(15, 100),(15, 200),(40, 200),(40, 100)], close=True, dxfattribs={'layer':'OUTLINE'})
-add_hatch_region(msp, [(15,100),(15,200),(40,200),(40,100)], HATCH.STEEL)
+# Shear plate  (3/8" × 6" plate welded to flange)
+msp.add_lwpolyline([(0.6,3),(0.6,9),(1.975,9),(1.975,3)], close=True, dxfattribs={'layer':'OUTLINE'})
+add_hatch_region(msp, [(0.6,3),(0.6,9),(1.975,9),(1.975,3)], HATCH.STEEL)
 
-# Bolts as circles
-for y in [120, 150, 180]:
-    msp.add_circle((27, y), 9, dxfattribs={'layer':'OUTLINE'})
-    add_centerlines(msp, (27, y), 12)
+# 3/4" A325 bolts (3 bolts at 3" spacing)
+for y in [4.5, 6.0, 7.5]:
+    msp.add_circle((1.2875, y), 0.375, dxfattribs={'layer':'OUTLINE'})  # bolt hole
+    add_centerlines(msp, (1.2875, y), 0.5)
+
+# Dimensions
+add_linear_dim(msp, (-0.6, 0), (0.6, 0), offset=-0.5)        # flange width
+add_linear_dim(msp, (1.975, 3), (1.975, 9), offset=0.5, angle=90)  # plate height
+add_label(msp, "W-SHAPE FLANGE", (-2, 6), align="MIDDLE_RIGHT")
+add_label(msp, "3/8 SHEAR PLATE", (2.5, 6), align="MIDDLE_LEFT")
 ```
 
-### Concrete section (with rebar)
+### Reinforced concrete column section — imperial
 ```python
-# Section outline
-msp.add_lwpolyline([(0,0),(400,0),(400,400),(0,400)], close=True, dxfattribs={'layer':'OUTLINE'})
-add_hatch_region(msp, [(0,0),(400,0),(400,400),(0,400)], HATCH.CONCRETE)
+# 16"×16" column section
+msp.add_lwpolyline([(0,0),(16,0),(16,16),(0,16)], close=True, dxfattribs={'layer':'OUTLINE'})
+add_hatch_region(msp, [(0,0),(16,0),(16,16),(0,16)], HATCH.CONCRETE)
 
-# Rebar as solid filled circles
-cover = 40
-bar_dia = 16
-for pos in [(cover, cover),(400-cover, cover),(cover, 400-cover),(400-cover, 400-cover)]:
+# 8 No.5 bars (5/8" dia) at 1.5" clear cover
+cover   = 1.5 + 0.625/2   # to bar centre
+bar_dia = 0.625
+for pos in [(cover,cover),(8,cover),(16-cover,cover),
+            (cover,8),(16-cover,8),
+            (cover,16-cover),(8,16-cover),(16-cover,16-cover)]:
     msp.add_circle(pos, bar_dia/2, dxfattribs={'layer':'OUTLINE'})
     add_centerlines(msp, pos, bar_dia)
 
-# Dimension: cover
-add_linear_dim(msp, (0, 0), (cover, 0), offset=-15)
+# Dimensions
+add_linear_dim(msp, (0,0),  (16,0),  offset=-0.5)              # width
+add_linear_dim(msp, (0,0),  (0,16),  offset=-0.5, angle=90)    # height
+add_linear_dim(msp, (0,0),  (cover,0), offset=-1.0)            # cover
+add_label(msp, "16x16 R.C. COLUMN", (8, 8))
+add_label(msp, "8-#5 BARS", (8, -1.5))
 ```
 
-### Pipe through wall
+### Pipe sleeve through concrete wall — imperial
 ```python
-# Wall section
-msp.add_lwpolyline([(0,0),(300,0),(300,200),(0,200)], close=True, dxfattribs={'layer':'OUTLINE'})
-add_hatch_region(msp, [(0,0),(300,0),(300,200),(0,200)], HATCH.CONCRETE)
+# 12" thick concrete wall
+msp.add_lwpolyline([(0,0),(12,0),(12,10),(0,10)], close=True, dxfattribs={'layer':'OUTLINE'})
+add_hatch_region(msp, [(0,0),(12,0),(12,10),(0,10)], HATCH.CONCRETE)
 
-# Pipe sleeve (hollow circle)
-sleeve_r = 100  # half of 200mm sleeve
-pipe_r   = 75   # half of 150mm pipe
-cx, cy   = 150, 100
+# 6" pipe (OD=6.625") inside 8" sleeve (OD=8.625")
+pipe_r   = 6.625 / 2
+sleeve_r = 8.625 / 2
+cx, cy   = 6, 5
 msp.add_circle((cx, cy), sleeve_r, dxfattribs={'layer':'OUTLINE'})
 msp.add_circle((cx, cy), pipe_r,   dxfattribs={'layer':'OUTLINE'})
-add_centerlines(msp, (cx, cy), sleeve_r + 20)
+add_centerlines(msp, (cx, cy), sleeve_r + 0.75)
 
-# Grout annulus hatch
-# (requires a path with hole — use two separate hatch boundary paths)
-h = msp.add_hatch(dxfattribs={'layer':'HATCH'})
-h.paths.add_edge_path()  # outer boundary
-# ... (draw annulus as needed)
-
+# Dimensions
 add_diameter_dim(msp, (cx, cy), pipe_r,   angle=45)
 add_diameter_dim(msp, (cx, cy), sleeve_r, angle=135)
+add_linear_dim(msp,  (0,0), (12,0), offset=-0.5)              # wall thickness
+add_label(msp, "6\" STD. PIPE", (cx+pipe_r+0.3, cy+pipe_r+0.3), align="BOTTOM_LEFT")
+add_label(msp, "8\" SLEEVE W/ GROUT", (cx-sleeve_r-0.3, cy+sleeve_r+0.3), align="BOTTOM_RIGHT")
 ```
 
 ## Error handling
