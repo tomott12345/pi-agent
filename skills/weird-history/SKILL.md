@@ -1,12 +1,13 @@
 ---
 name: weird-history
 description: |
-  Searches for weird, surprising, or fascinating historical facts near any US zip
-  code or location name (e.g., "07405", "Butler, NJ"). Geocodes the location, finds
-  nearby Wikipedia articles, and uses the LLM to identify the most interesting or
-  unusual historical fact — something most people wouldn't know. Always includes a
-  direct Wikipedia link. Use when asked about local history, unusual facts, hidden
-  history, or "what's interesting about X."
+  Searches for weird, surprising, or fascinating historical facts near any location —
+  US zip code, city name, or international place (e.g., "07405", "Butler, NJ",
+  "Edinburgh, Scotland"). Geocodes the location, finds nearby Wikipedia articles
+  within 10 km, and uses the LLM to identify the most interesting or unusual
+  historical fact — something most people wouldn't know. Always includes a direct
+  Wikipedia link. Use when asked about local history, unusual facts, hidden history,
+  or "what's interesting about X."
 license: MIT
 compatibility: "Linux/macOS (requires Python 3; no external packages needed)"
 metadata:

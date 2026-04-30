@@ -2,60 +2,85 @@
 name: image-reader
 description: |
   Reads metadata from JPEG, PNG, GIF, and other ImageMagick-supported image files,
-  returning format, dimensions, color depth, and related properties. Use when a user
-  asks about the size, format, or technical details of an image file, or when you need
-  to inspect image properties without opening a viewer.
+  returning format, dimensions, color depth, color space, file size, and related
+  properties. Use when a user asks about the size, format, or technical details of
+  an image file, or when you need to inspect image properties without opening a viewer.
 license: MIT
-compatibility: Linux/macOS (requires `identify` from ImageMagick)
+compatibility: "macOS/Linux (requires ImageMagick — brew install imagemagick)"
 metadata:
   author: "Thomas Ott"
-  version: "1.0"
+  version: "1.1"
 ---
 
 # Image Reader Skill
 
 ## Setup
 
-1. **Install the prerequisite** (only needed once):
-
-   ```bash
-   # macOS (brew)  
-   brew install imagemagick   # provides `identify`
-
-   # Ubuntu/Debian  
-   sudo apt-get install imagemagick
-   ```
-
-2. No additional Python packages are required.
-
-## Usage
-
-### 2.1 Read image details
+Install ImageMagick (only needed once):
 
 ```bash
-/skill:image-reader <path-to-image>
+# macOS
+brew install imagemagick
+
+# Ubuntu/Debian
+sudo apt-get install imagemagick
 ```
 
-*Result:* the skill prints the image's format, dimensions, color depth, and other details to STDOUT.
+## Invocation
 
-### 2.2 Example session
+```
+/image-reader [path-to-image]
+```
+
+Examples:
+```
+/image-reader ~/Downloads/photo.jpg
+/image-reader /tmp/screenshot.png
+/image-reader ~/Desktop/diagram.tiff
+```
+
+## Instructions for the model
+
+### Step 1 — Run the script
 
 ```bash
-$ /skill:image-reader ./photo.jpg
-Format: JPEG
-Dimensions: 1920x1080
-Color depth: 8-bit
+bash /Users/ottt/.pi/agent/skills/image-reader/read_image.sh [path-to-image]
 ```
 
-## How it works
+The script runs ImageMagick's `identify` command on the file and prints its raw output.
 
-1. The CLI calls the skill with the image path as argument.
-2. The skill’s entry script (`read_image.sh`) receives the path and runs `identify` on the file.
-3. The output of `identify` is printed directly to STDOUT.
-4. Errors (missing file, missing `identify`, etc.) are reported on STDERR.
+### Step 2 — Present the results
 
-## Notes & extensions
+The `identify` command outputs one line per image (or one per frame for animated files).
+A typical line looks like:
 
-- **Supported formats** – JPEG, PNG, GIF, and other formats supported by ImageMagick.
-- **Error handling** – If `identify` fails (e.g., invalid file), the script returns an error message.
-- **Chunking** – Not applicable for single images, but for multiple images, the skill could process each file in sequence.
+```
+photo.jpg JPEG 1920x1080 1920x1080+0+0 8-bit sRGB 2.1MB 0.000u 0:00.000
+```
+
+Parse and report in a readable format:
+
+| Property | Where it appears |
+|---|---|
+| **File name** | First token |
+| **Format** | Second token (JPEG, PNG, GIF, WEBP, TIFF …) |
+| **Dimensions** | `WxH` pixels |
+| **Color depth** | e.g. `8-bit`, `16-bit` |
+| **Color space** | e.g. `sRGB`, `CMYK`, `Gray` |
+| **File size** | e.g. `2.1MB`, `450KB` |
+| **Frames** | For animated GIFs, `identify` prints one line per frame — note the frame count |
+
+### Step 3 — Note any anomalies
+
+- If the format doesn't match the file extension, call it out
+- If the image is very large (>20 MP or >50 MB), mention it
+- For animated GIFs, report frame count and total size
+
+## Error handling
+
+| Condition | Response |
+|---|---|
+| File not found | Report the path; ask the user to confirm it |
+| `identify` not installed | Suggest `brew install imagemagick` (macOS) or `sudo apt-get install imagemagick` |
+| Unsupported format | Report the raw `identify` error |
+| Permission denied | Ask the user to check file permissions |

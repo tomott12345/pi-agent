@@ -3,10 +3,11 @@ name: weather-forecast
 description: |
   Fetches current weather conditions and today's outlook for any US zip code or
   location name (e.g., "07405", "Kinnelon, NJ", "Butler, New Jersey"). Uses
-  Nominatim for geocoding and Open-Meteo for weather data — no API key required.
-  Reports temperature, humidity, wind, precipitation chance, hourly breakdown, and
-  a plain-English summary. Use when asked about current weather, today's forecast,
-  or whether to bring an umbrella.
+  Nominatim for geocoding (US locations) and Open-Meteo for weather data — no API
+  key required. Reports temperature, humidity, wind, precipitation chance, hourly
+  breakdown, and a plain-English summary. Use when asked about current weather,
+  today's forecast, or whether to bring an umbrella. For international locations
+  or more detailed NWS data, use the /weather skill instead.
 license: MIT
 compatibility: "Linux/macOS (requires Python 3; no external packages needed)"
 metadata:
@@ -19,7 +20,7 @@ metadata:
 ## Invocation
 
 ```
-/weather-forecast <zip code or location>
+/weather-forecast [zip code or location]
 ```
 
 Examples:

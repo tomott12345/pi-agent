@@ -1,12 +1,13 @@
 ---
 name: social-media-news
 description: |
-  Searches the last 24 hours of top AI, technology, and engineering news from Hacker
-  News and major tech RSS feeds (TechCrunch, Ars Technica, VentureBeat, The Verge,
-  MIT Tech Review, Wired). Selects the single most popular or significant story and
-  writes a ready-to-post 2-paragraph social media summary with source link. Requires
-  no API keys. Supports optional category focus (--ai, --tech, --engineering) and
-  configurable result count.
+  Fetches the top AI, technology, and engineering stories from the last 24 hours
+  from Hacker News and major tech RSS feeds (TechCrunch, Ars Technica, VentureBeat,
+  The Verge, MIT Tech Review, Wired). Returns the top N ranked stories (default 5,
+  configurable with --limit), then picks the single most compelling one and writes a
+  ready-to-post 2-paragraph social media summary with spin-level assessment and source
+  link. No API keys required. Supports optional category focus (--ai, --tech,
+  --engineering) and configurable lookback window (--hours).
 license: MIT
 compatibility: "Linux/macOS (requires Python 3; no external packages needed)"
 metadata:
