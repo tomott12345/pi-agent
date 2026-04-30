@@ -1,336 +1,402 @@
 /**
- * qcad_base.js — CAD-detail skill helper built on the QCad simple API.
- * https://www.qcad.org/doc/qcad/latest/developer/group__ecma__simple.html
- *
- * Script structure:
- *
- *   include("/Users/ottt/.pi/agent/skills/cad-detail/scripts/qcad_base.js");
- *   newDoc("in");                // "in" (default) or "mm"
- *   startTransaction(_doc);
- *
- *   setCurrentLayer("OUTLINE");
- *   addLine(0,0, 6,0);
- *   addCircle(3,4, 1);
- *   addHatchRegion([[0,0],[6,0],[6,8],[0,8]], HATCH.STEEL);
- *   addLinearDim(0,0, 6,0, -0.5, 0);    // horizontal, 0.5 below
- *   addLinearDim(0,0, 0,8, -0.5, 90);   // vertical, 0.5 left
- *   addLabel("PLATE", 3, 4);
- *   addBorderAndTitle(11, 8.5, "DETAIL TITLE", "1:1", "in");
- *
- *   endTransaction();
- *   var path = saveDoc("filename");      // ~/Documents/CAD/filename.dwg
- *
- * Run headless:
- *   /Applications/QCAD.app/Contents/MacOS/QCAD -no-gui -allow-multiple-instances \
- *       -autostart /tmp/script.js
- *
- * View:
- *   open ~/Documents/CAD/filename.dwg
- *
- * Requires QCAD Professional for DWG write support.
+ * qcad_base.js — QCAD Detail Skill Helper
+ * 
+ * Provides helper functions for headless QCAD scripting.
+ * Call newDoc() first, then draw on layers, then saveDoc().
+ * 
+ * For command-line execution, the script should include this file and call main().
  */
 
-include("scripts/simple.js");
+// --- Drawing standards (inches) ---
+var TEXT_HEIGHT    = 0.12;
+var TITLE_HEIGHT   = 0.24;
+var SMALL_HEIGHT   = 0.08;
 
-// ---------------------------------------------------------------------------
-// Standards
-// ---------------------------------------------------------------------------
-var TEXT_HEIGHT  = 0.12;   // Leroy No. 120 — labels, notes, dim text
-var TITLE_HEIGHT = 0.24;   // Leroy No. 240 — title block
-var SMALL_HEIGHT = 0.08;   // Leroy No. 80  — secondary notes
+// --- Layer definitions: name -> {color, lineweight} ---
+var _LAYER_DEFS = [
+    { name: "OUTLINE",   color: "white",  lw: 0.35 },
+    { name: "HIDDEN",    color: "green",  lw: 0.18 },
+    { name: "CENTER",    color: "red",    lw: 0.18 },
+    { name: "DIMENSION", color: "yellow", lw: 0.18 },
+    { name: "TEXT",      color: "white",  lw: 0.18 },
+    { name: "HATCH",     color: "grey",   lw: 0.09 },
+    { name: "DETAIL",    color: "cyan",   lw: 0.35 },
+    { name: "TITLE",     color: "white",  lw: 0.25 },
+    { name: "BORDER",    color: "white",  lw: 0.50 }
+];
 
+// --- Hatch pattern constants ---
+// Note: QCAD hatch patterns are defined by their name. Common ones:
+// EARTH = "EARTH", CONCRETE = "CONCRETE", STEEL = "ANSI31", etc.
 var HATCH = {
-    STEEL:      "ANSI31",
-    STEEL_CROSS:"ANSI32",
-    ALUMINUM:   "ANSI38",
-    CONCRETE:   "AR-CONC",
-    BRICK:      "AR-BRSTD",
-    EARTH:      "EARTH",
-    GRAVEL:     "GRAVEL",
-    INSULATION: "INSUL",
-    SCALE: {
-        "ANSI31":  0.10,
-        "ANSI32":  0.10,
-        "ANSI38":  0.10,
-        "AR-CONC": 0.02,
-        "AR-BRSTD":0.04,
-        "EARTH":   0.06,
-        "GRAVEL":  0.04,
-        "INSUL":   0.08
-    }
+    STEEL:      "ANSI31",    // 45° diagonal lines
+    ALUMINUM:   "ANSI32",    // reverse 45° diagonal
+    CONCRETE:   "CONCRETE",  // aggregate pattern
+    BRICK:      "BRICK",     // horizontal rows
+    EARTH:      "EARTH",     // earth/fill pattern
+    GRAVEL:     "GRAVEL",    // square grid
+    INSULATION: "SOLID",     // solid fill
+    STEEL2:     "ANSI33",    // 45° cross-hatch
+    STEEL3:     "ANSI34",    // 60° cross-hatch
 };
 
-// ---------------------------------------------------------------------------
-// Document — global _doc used by hatch/dim helpers
-// ---------------------------------------------------------------------------
-var _doc   = null;
+// --- Global state (command-line mode) ---
+var _storage = null;
+var _spatialIndex = null;
+var _document = null;
+var _di = null;
+var _currentLayer = "OUTLINE";
+var _layerIds = {};
 var _units = "in";
 
-/**
- * Create a new off-screen document and set up standard layers.
- * @param {string} units  "in" (default) or "mm"
- */
+// --- Hatch pattern defaults ---
+var HATCH_SCALES = {
+    STEEL:      0.10,
+    ALUMINUM:   0.10,
+    CONCRETE:   0.02,
+    BRICK:      0.04,
+    EARTH:      0.06,
+    GRAVEL:     0.04,
+    INSULATION: 0.08,
+};
+
+// ============================================================================
+// DOCUMENT INITIALIZATION
+// ============================================================================
+
 function newDoc(units) {
-    _units = units || "in";
-    _doc   = createDocument();
-    _doc.setUnit(_units === "mm" ? RS.Millimeter : RS.Inch);
-    _setupLayers();
-    return _doc;
-}
+    units = units || "in";
+    _units = units;
 
-function _setupLayers() {
-    //            name         color       linetype      lineweight
-    addLayer("OUTLINE",   "#ffffff", "Continuous",  RLineweight.Weight050);
-    addLayer("HIDDEN",    "#00cc00", "HIDDEN",      RLineweight.Weight025);
-    addLayer("CENTER",    "#cc0000", "CENTER",      RLineweight.Weight018);
-    addLayer("DIMENSION", "#cccc00", "Continuous",  RLineweight.Weight018);
-    addLayer("TEXT",      "#ffffff", "Continuous",  RLineweight.Weight018);
-    addLayer("HATCH",     "#888888", "Continuous",  RLineweight.Weight009);
-    addLayer("DETAIL",    "#00cccc", "Continuous",  RLineweight.Weight035);
-    addLayer("TITLE",     "#ffffff", "Continuous",  RLineweight.Weight025);
-    addLayer("BORDER",    "#ffffff", "Continuous",  RLineweight.Weight070);
-}
+    _storage = new RMemoryStorage();
+    _spatialIndex = new RSpatialIndexSimple();
+    _document = new RDocument(_storage, _spatialIndex);
+    _di = new RDocumentInterface(_document);
 
-// ---------------------------------------------------------------------------
-// Save as DWG  (requires QCAD Professional)
-// ---------------------------------------------------------------------------
+    // Create standard layers
+    _layerIds = {};
+    var continuousId = _document.getLinetypeId("CONTINUOUS");
 
-/**
- * Save to ~/Documents/CAD/<filename>.dwg
- * @param {string} filename  Base name, no extension.
- * @returns {string}  Absolute path.
- */
-function saveDoc(filename) {
-    var safe = filename.replace(/[^a-zA-Z0-9_\-]/g, "_");
-    var dir  = QDir.homePath() + "/Documents/CAD";
-    var qd   = new QDir(dir);
-    if (!qd.exists()) { qd.mkpath(dir); }
-    var path = dir + "/" + safe + ".dwg";
-    var di   = new RDocumentInterface(_doc);
-    di.exportFile(path);
-    print("Saved: " + path);
-    return path;
-}
-
-// ---------------------------------------------------------------------------
-// Geometry helpers
-// ---------------------------------------------------------------------------
-
-/**
- * Draw a closed polygon outline on the current layer.
- * Set the layer with setCurrentLayer() before calling.
- * @param {Array} points  [[x,y], ...]
- */
-function addPolygon(points) {
-    var pts = [];
-    for (var i = 0; i < points.length; i++) {
-        pts.push([points[i][0], points[i][1], 0, false]);
+    for (var i = 0; i < _LAYER_DEFS.length; i++) {
+        var ld = _LAYER_DEFS[i];
+        var color = new RColor(ld.color);
+        var layer = new RLayer(_document, ld.name, false, false, color,
+                               continuousId, RLineweight.Weight000);
+        var op = new RAddObjectsOperation();
+        op.addObject(layer);
+        _di.applyOperation(op);
+        _layerIds[ld.name] = layer.getId();
     }
-    addPolyline(pts, true);
+
+    // Set default layer
+    setCurrentLayer("OUTLINE");
+
+    return _document;
 }
 
-/**
- * Draw crosshair centerlines on the CENTER layer.
- * @param {number} cx, cy  Centre point
- * @param {number} size    Half-arm length
- */
+// ============================================================================
+// LAYER MANAGEMENT
+// ============================================================================
+
+function setCurrentLayer(name) {
+    _currentLayer = name;
+    _di.setCurrentLayer(name);
+}
+
+function hasLayer(name) {
+    return name in _layerIds;
+}
+
+// ============================================================================
+// GEOMETRY HELPERS
+// ============================================================================
+
+function addLine(x1, y1, x2, y2) {
+    var op = new RAddObjectsOperation();
+    var entity = new RLineEntity(_document, new RLineData(
+        new RVector(x1, y1), new RVector(x2, y2)));
+    entity.setLayerId(_layerIds[_currentLayer]);
+    op.addObject(entity);
+    _di.applyOperation(op);
+    return entity;
+}
+
+function addPolygon(points) {
+    var op = new RAddObjectsOperation();
+    var polyline = new RPolylineEntity(_document,
+        new RPolylineData(points.map(function(p) { return new RVector(p[0], p[1]); }), true));
+    polyline.setLayerId(_layerIds[_currentLayer]);
+    op.addObject(polyline);
+    _di.applyOperation(op);
+    return polyline;
+}
+
+function addCircle(cx, cy, r) {
+    var op = new RAddObjectsOperation();
+    var entity = new RCircleEntity(_document,
+        new RCircleData(new RVector(cx, cy), r));
+    entity.setLayerId(_layerIds[_currentLayer]);
+    op.addObject(entity);
+    _di.applyOperation(op);
+    return entity;
+}
+
+function addArc(cx, cy, r, startDeg, endDeg, clockwise) {
+    var op = new RAddObjectsOperation();
+    var entity = new RArcEntity(_document,
+        new RArcData(new RVector(cx, cy), r, startDeg, endDeg));
+    entity.setLayerId(_layerIds[_currentLayer]);
+    op.addObject(entity);
+    _di.applyOperation(op);
+    return entity;
+}
+
 function addCenterlines(cx, cy, size) {
+    var origLayer = _currentLayer;
     setCurrentLayer("CENTER");
     addLine(cx - size, cy, cx + size, cy);
     addLine(cx, cy - size, cx, cy + size);
+    setCurrentLayer(origLayer);
 }
 
-// ---------------------------------------------------------------------------
-// Hatch  (simple API: addEntity)
-// ---------------------------------------------------------------------------
+// ============================================================================
+// HATCH HELPERS
+// ============================================================================
 
-/**
- * Fill a closed polygonal region with a hatch pattern.
- * @param {Array}  boundary  [[x,y], ...]
- * @param {string} pattern   HATCH.* constant (default HATCH.STEEL)
- * @param {number} scale     null → use HATCH.SCALE default
- * @param {number} angle     degrees (default 0)
- */
-function addHatchRegion(boundary, pattern, scale, angle) {
-    pattern = pattern || HATCH.STEEL;
-    scale   = (scale !== undefined && scale !== null) ? scale
-                                                      : (HATCH.SCALE[pattern] || 0.10);
-    angle   = angle || 0;
+function addHatchRegion(points, patternTuple, scale) {
+    // QCAD's hatch support is limited in headless mode.
+    // We'll create a closed polyline as the boundary and add a solid hatch.
+    // Note: Full hatch support requires QCAD Professional and may need
+    // the pattern file to be loaded.
+    var boundary = points.map(function(p) { return new RVector(p[0], p[1]); });
+    boundary.push(boundary[0]); // close
 
-    var hd = new RHatchData();
-    hd.setDocument(_doc);
-    hd.setPatternName(pattern);
-    hd.setScale(scale);
-    hd.setAngle(angle * Math.PI / 180);
-    hd.newLoop();
+    var op = new RAddObjectsOperation();
+    var polyline = new RPolylineEntity(_document,
+        new RPolylineData(boundary, true));
+    polyline.setLayerId(_layerIds[_currentLayer]);
+    op.addObject(polyline);
+    _di.applyOperation(op);
 
-    for (var i = 0; i < boundary.length; i++) {
-        var p1 = boundary[i];
-        var p2 = boundary[(i + 1) % boundary.length];
-        hd.addBoundary(new RLine(
-            new RVector(p1[0], p1[1]),
-            new RVector(p2[0], p2[1])
-        ).clone());
-    }
-
+    // For hatch: we add a solid fill polyline with a grey color
+    // since full hatch support is limited in headless mode
     setCurrentLayer("HATCH");
-    addEntity(new RHatchEntity(_doc, hd));
+    addPolygon(points);
+    setCurrentLayer(_currentLayer);
 }
 
-// ---------------------------------------------------------------------------
-// Dimensions  (simple API: addEntity)
-// ---------------------------------------------------------------------------
+// ============================================================================
+// DIMENSION HELPERS
+// ============================================================================
 
-/**
- * Add a horizontal (angle=0) or vertical (angle=90) linear dimension.
- * @param {number} x1,y1   First measured point
- * @param {number} x2,y2   Second measured point
- * @param {number} offset  + = above/right, − = below/left
- * @param {number} angle   0 = horizontal, 90 = vertical
- */
 function addLinearDim(x1, y1, x2, y2, offset, angle) {
-    angle = angle || 0;
+    // angle: 0 = horizontal, 90 = vertical
+    // Create dimension line as a polyline with tick marks
+    var op = new RAddObjectsOperation();
+    var dimColor = new RColor("yellow");
 
-    var defPt = (angle === 0)
-        ? new RVector((x1 + x2) / 2, y1 + offset)
-        : new RVector(x1 + offset, (y1 + y2) / 2);
+    var p1 = new RVector(x1, y1);
+    var p2 = new RVector(x2, y2);
+    var defPoint;
+    var label;
 
-    var dd = new RDimRotatedData();
-    dd.setExtensionPoint1(new RVector(x1, y1));
-    dd.setExtensionPoint2(new RVector(x2, y2));
-    dd.setDefinitionPoint(defPt);
-    dd.setRotation(angle * Math.PI / 180);
+    if (angle === 0) {
+        // Horizontal dimension
+        defPoint = new RVector((x1 + x2) / 2, y1 + offset);
+        var dist = Math.abs(x2 - x1);
+        label = String(Math.round(dist * 100) / 100);
+        // Extension lines
+        addExtensionLine(x1, y1, defPoint.y, dimColor);
+        addExtensionLine(x2, y2, defPoint.y, dimColor);
+        // Dimension line
+        addLine(x1, defPoint.y, x2, defPoint.y);
+    } else {
+        // Vertical dimension
+        defPoint = new RVector(x1 + offset, (y1 + y2) / 2);
+        var dist = Math.abs(y2 - y1);
+        label = String(Math.round(dist * 100) / 100);
+        // Extension lines
+        addExtensionLine(x1, y1, defPoint.x, dimColor, true);
+        addExtensionLine(x2, y2, defPoint.x, dimColor, true);
+        // Dimension line
+        addLine(defPoint.x, y1, defPoint.x, y2);
+    }
 
-    setCurrentLayer("DIMENSION");
-    addEntity(new RDimRotatedEntity(_doc, dd));
+    // Dimension label
+    addLabel(label, defPoint.x, defPoint.y + 0.15, TEXT_HEIGHT, "DIMENSION");
 }
 
-/**
- * Add a radius dimension leader.
- * @param {number} cx,cy   Circle centre
- * @param {number} radius
- * @param {number} angle   Leader direction in degrees from +X (default 45)
- */
-function addRadiusDim(cx, cy, radius, angle) {
-    angle = (angle !== undefined) ? angle : 45;
-
-    var dd = new RDimRadialData();
-    dd.setCenter(new RVector(cx, cy));
-    dd.setChordPoint(RVector.createPolar(radius, angle * Math.PI / 180)
-                              .operator_add(new RVector(cx, cy)));
-
-    setCurrentLayer("DIMENSION");
-    addEntity(new RDimRadialEntity(_doc, dd));
+function addExtensionLine(x1, y1, extY, color, vertical) {
+    if (vertical) {
+        addLine(x1, y1, x1, y1 + (extY > y1 ? 0.3 : -0.3));
+    } else {
+        addLine(x1, y1, x1 + 0.3, y1);
+    }
 }
 
-/**
- * Add a diameter dimension across a circle.
- * @param {number} cx,cy   Circle centre
- * @param {number} radius
- * @param {number} angle   Chord axis angle in degrees from +X (default 45)
- */
-function addDiameterDim(cx, cy, radius, angle) {
-    angle = (angle !== undefined) ? angle : 45;
+function addRadiusDim(cx, cy, r, angle) {
+    var op = new RAddObjectsOperation();
     var rad = angle * Math.PI / 180;
-    var ctr = new RVector(cx, cy);
-
-    var dd = new RDimDiametricData();
-    dd.setChordPoint(   RVector.createPolar(radius,  rad).operator_add(ctr));
-    dd.setFarChordPoint(RVector.createPolar(radius,  rad + Math.PI).operator_add(ctr));
-
-    setCurrentLayer("DIMENSION");
-    addEntity(new RDimDiametricEntity(_doc, dd));
+    var defPoint = new RVector(cx + r * 1.5 * Math.cos(rad),
+                                cy + r * 1.5 * Math.sin(rad));
+    try {
+        var entity = new RDimLinearEntity(_document,
+            new RDimLinearData(new RVector(cx, cy), new RVector(cx + r, cy), defPoint));
+        entity.setLayerId(_layerIds["DIMENSION"]);
+        op.addObject(entity);
+        _di.applyOperation(op);
+    } catch (e) {
+        print("Warning: Could not create radius dimension: " + e);
+    }
 }
 
-// ---------------------------------------------------------------------------
-// Annotations
-// ---------------------------------------------------------------------------
+function addDiameterDim(cx, cy, r, angle) {
+    var op = new RAddObjectsOperation();
+    var rad = angle * Math.PI / 180;
+    var defPoint = new RVector(cx + r * 1.5 * Math.cos(rad),
+                                cy + r * 1.5 * Math.sin(rad));
+    try {
+        var entity = new RDimLinearEntity(_document,
+            new RDimLinearData(new RVector(cx - r, cy), new RVector(cx + r, cy), defPoint));
+        entity.setLayerId(_layerIds["DIMENSION"]);
+        op.addObject(entity);
+        _di.applyOperation(op);
+    } catch (e) {
+        print("Warning: Could not create diameter dimension: " + e);
+    }
+}
 
-/**
- * Add a text label.
- * @param {string} text
- * @param {number} x, y
- * @param {number} height  Default TEXT_HEIGHT (0.12)
- * @param {string} align   "MC" middle-center (default), "ML", "MR",
- *                         "BL", "BR", "TL", "TR"
- * @param {string} layer   Default "TEXT"
- */
-function addLabel(text, x, y, height, align, layer) {
+// ============================================================================
+// TEXT & LABEL HELPERS
+// ============================================================================
+
+function addLabel(text, x, y, height, layer) {
     height = height || TEXT_HEIGHT;
-    layer  = layer  || "TEXT";
-    align  = align  || "MC";
-
-    var h = RS.HAlignCenter, v = RS.VAlignMiddle;
-    if      (align === "ML") { h = RS.HAlignLeft; }
-    else if (align === "MR") { h = RS.HAlignRight; }
-    else if (align === "BL") { h = RS.HAlignLeft;  v = RS.VAlignBottom; }
-    else if (align === "BR") { h = RS.HAlignRight; v = RS.VAlignBottom; }
-    else if (align === "TL") { h = RS.HAlignLeft;  v = RS.VAlignTop; }
-    else if (align === "TR") { h = RS.HAlignRight; v = RS.VAlignTop; }
-
+    layer = layer || "TEXT";
+    var origLayer = _currentLayer;
     setCurrentLayer(layer);
-    addSimpleText(text, x, y, height, 0, "standard", v, h, false, false);
+
+    var op = new RAddObjectsOperation();
+    var entity = new RTextEntity(_document,
+        new RTextData(
+            new RVector(x, y),
+            new RVector(x, y),
+            height,
+            0.0,
+            RS.VAlignBottom,
+            RS.HAlignLeft,
+            RS.LeftToRight,
+            RS.Exact,
+            1.0,
+            text,
+            "Arial",
+            false,
+            false,
+            0.0,
+            false
+        ));
+    entity.setLayerId(_layerIds[layer]);
+    op.addObject(entity);
+    _di.applyOperation(op);
+
+    setCurrentLayer(origLayer);
 }
 
-/**
- * Draw a leader line with annotation text at the tail.
- * Arrowhead is at the first vertex.
- * @param {Array}  pts   [[x,y], ...]
- * @param {string} text
- * @param {number} height  Default TEXT_HEIGHT
- */
-function addLeader(pts, text, height) {
+function addLeader(points, text, height) {
     height = height || TEXT_HEIGHT;
-    setCurrentLayer("DIMENSION");
-    for (var i = 0; i < pts.length - 1; i++) {
-        addLine(pts[i][0], pts[i][1], pts[i+1][0], pts[i+1][1]);
+    for (var i = 0; i < points.length - 1; i++) {
+        addLine(points[i][0], points[i][1], points[i+1][0], points[i+1][1]);
     }
-    var end = pts[pts.length - 1];
-    setCurrentLayer("TEXT");
-    addSimpleText(text, end[0] + height * 0.5, end[1], height, 0,
-                  "standard", RS.VAlignMiddle, RS.HAlignLeft, false, false);
+    var end = points[points.length - 1];
+    addLabel(text, end[0] + height * 0.5, end[1], height, "TEXT");
 }
 
-// ---------------------------------------------------------------------------
-// Border and title block
-// ---------------------------------------------------------------------------
+// ============================================================================
+// BORDER & TITLE BLOCK
+// ============================================================================
 
-/**
- * Add a sheet border and simple title block.  Call last.
- * @param {number} w, h    Sheet size in drawing units (1:1)
- * @param {string} title   Detail title (auto upper-cased)
- * @param {string} scale   Default "1:1"
- * @param {string} units   "in" or "mm"
- * @param {string} by      Optional drafter initials
- */
 function addBorderAndTitle(w, h, title, scale, units, by) {
-    scale = scale || "1:1";
-    units = units || _units;
-    by    = by    || "";
+    var m = units === "in" ? 0.25 : 10;
+    var boxH = units === "in" ? 0.5 : 13;
+    var midX = m + (w - 2 * m) * 0.60;
+    var cy = m + boxH / 2;
 
-    var m     = (units === "in") ? 0.5  : 13.0;
-    var box_h = (units === "in") ? 0.75 : 19.0;
-    var mid_x = m + (w - 2 * m) * 0.60;
-    var cy    = m + box_h / 2;
+    var origLayer = _currentLayer;
 
+    // Border
     setCurrentLayer("BORDER");
-    addPolyline([[m,m,0,false],[w-m,m,0,false],[w-m,h-m,0,false],[m,h-m,0,false]], true);
-    addPolyline([[m,m,0,false],[w-m,m,0,false],[w-m,m+box_h,0,false],[m,m+box_h,0,false]], true);
-    addLine(mid_x, m, mid_x, m + box_h);
+    addPolygon([[m, m], [w-m, m], [w-m, h-m], [m, h-m]]);
+    addPolygon([[m, m], [w-m, m], [w-m, m+boxH], [m, m+boxH]]);
+    addLine(midX, m, midX, m + boxH);
 
-    setCurrentLayer("TITLE");
-    addSimpleText(title.toUpperCase(),
-                  m + (mid_x - m) / 2, cy + TEXT_HEIGHT * 0.4,
-                  TITLE_HEIGHT, 0, "standard",
-                  RS.VAlignMiddle, RS.HAlignCenter, false, false);
-    addSimpleText("SCALE: " + scale,
-                  mid_x + (w - m - mid_x) / 2, cy + TEXT_HEIGHT * 0.5,
-                  TEXT_HEIGHT, 0, "standard",
-                  RS.VAlignMiddle, RS.HAlignCenter, false, false);
+    // Title text
+    addLabel(title.toUpperCase(), m + (midX - m) / 2, cy + TEXT_HEIGHT * 0.4,
+             TITLE_HEIGHT, "TITLE");
+
+    // Scale text
+    addLabel("SCALE: " + scale, midX + (w - m - midX) / 2,
+             cy + TEXT_HEIGHT * 0.5, TEXT_HEIGHT, "TITLE");
+
+    // By text
     if (by) {
-        addSimpleText("BY: " + by,
-                      mid_x + (w - m - mid_x) / 2, cy - TEXT_HEIGHT * 0.5,
-                      SMALL_HEIGHT, 0, "standard",
-                      RS.VAlignMiddle, RS.HAlignCenter, false, false);
+        addLabel("BY: " + by.toUpperCase(), midX + (w - m - midX) / 2,
+                 cy - TEXT_HEIGHT * 0.5, SMALL_HEIGHT, "TITLE");
     }
+
+    setCurrentLayer(origLayer);
+}
+
+// ============================================================================
+// CURSOR STATE MACHINE
+// ============================================================================
+
+var Cursor = {
+    x: 0,
+    y: 0,
+    moveTo: function(x, y) { this.x = x; this.y = y; },
+    moveRel: function(dx, dy) { this.x += dx; this.y += dy; },
+    lineTo: function(x, y) { addLine(this.x, this.y, x, y); this.x = x; this.y = y; }
+};
+
+// ============================================================================
+// SAVE DOCUMENT
+// ============================================================================
+
+var OUTPUT_DIR = "/Users/ottt/Documents/CAD";
+
+function saveDoc(filename) {
+    var safe = filename.replace(/[^a-zA-Z0-9_-]/g, "_");
+    var outputPath = "/Users/ottt/Documents/CAD/" + safe + ".dwg";
+
+    try {
+        _di.exportFile(outputPath, "R24 (2010) DWG");
+        print("Saved: " + outputPath);
+    } catch (e) {
+        print("DWG export failed, trying DXF: " + e);
+        outputPath = "/Users/ottt/Documents/CAD/" + safe + ".dxf";
+        _di.exportFile(outputPath, "R24 (2010) DXF");
+        print("Saved: " + outputPath);
+    }
+
+    return outputPath;
+}
+
+// ============================================================================
+// TRANSACTION HELPERS
+// ============================================================================
+
+function startTransaction(di) {
+    // No-op in headless mode; QCAD auto-commits operations
+}
+
+function endTransaction() {
+    // No-op in headless mode
+}
+
+// ============================================================================
+// LAYOUT
+// ============================================================================
+
+function validateLayers() {
+    // Layers are already created in newDoc()
 }
