@@ -19,7 +19,7 @@ metadata:
 ## Invocation
 
 ```
-/steam-factoid <keyword>
+/steam-factoid [keyword]
 ```
 
 Examples:
@@ -53,7 +53,7 @@ Any other keyword also works — the script falls back to full-text Wikipedia se
 ### Step 1 — Run the search script
 
 ```bash
-python3 /Users/ottt/.pi/agent/skills/steam-factoid/scripts/steam_search.py <keyword>
+python3 /Users/ottt/.pi/agent/skills/steam-factoid/scripts/steam_search.py [keyword]
 ```
 
 The script returns a list of Wikipedia articles with their intro extracts and
