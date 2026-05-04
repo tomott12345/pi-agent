@@ -5,6 +5,8 @@
  * Call newDoc() first, then draw on layers, then saveDoc().
  * 
  * For command-line execution, the script should include this file and call main().
+ * 
+ * @param {string} outputDir - Directory where the DWG/DXF file should be saved (default: "/Users/ottt/Documents/CAD")
  */
 
 // --- Drawing standards (inches) ---
@@ -27,7 +29,7 @@ var _LAYER_DEFS = [
 
 // --- Hatch pattern constants ---
 // Note: QCAD hatch patterns are defined by their name. Common ones:
-// EARTH = "EARTH", CONCRETE = "CONCRETE", STEEL = "ANSI31", etc.
+ // EARTH = "EARTH", CONCRETE = "CONCRETE", STEEL = "ANSI31", etc.
 var HATCH = {
     STEEL:      "ANSI31",    // 45° diagonal lines
     ALUMINUM:   "ANSI32",    // reverse 45° diagonal
@@ -92,6 +94,12 @@ function newDoc(units) {
     setCurrentLayer("OUTLINE");
 
     return _document;
+}
+
+function setOutputDir(outputDir) {
+    // This function can be called to override the default output directory
+    // The saveDoc function will use this directory
+    _outputDir = outputDir;
 }
 
 // ============================================================================
@@ -362,18 +370,18 @@ var Cursor = {
 // SAVE DOCUMENT
 // ============================================================================
 
-var OUTPUT_DIR = "/Users/ottt/Documents/CAD";
+var _outputDir = "/Users/ottt/Documents/CAD"; // Default output directory
 
 function saveDoc(filename) {
     var safe = filename.replace(/[^a-zA-Z0-9_-]/g, "_");
-    var outputPath = "/Users/ottt/Documents/CAD/" + safe + ".dwg";
+    var outputPath = _outputDir + "/" + safe + ".dwg";
 
     try {
         _di.exportFile(outputPath, "R24 (2010) DWG");
         print("Saved: " + outputPath);
     } catch (e) {
         print("DWG export failed, trying DXF: " + e);
-        outputPath = "/Users/ottt/Documents/CAD/" + safe + ".dxf";
+        outputPath = _outputDir + "/" + safe + ".dxf";
         _di.exportFile(outputPath, "R24 (2010) DXF");
         print("Saved: " + outputPath);
     }
