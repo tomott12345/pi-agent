@@ -81,6 +81,7 @@ _CATEGORY_SEEDS = {
     "rockets":       ["History of rockets", "Rocketry", "Space launch vehicles"],
     "planets":       ["Planetary science", "Solar System"],
     "stars":         ["Stars", "History of astronomy"],
+    "alpha":         ["Artificial intelligence projects", "Machine learning"],
 
     # Medicine / Health (S-T-E-A-M variant)
     "medicine":      ["History of medicine", "Medical discoveries"],

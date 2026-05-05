@@ -1,13 +1,11 @@
 {
-  "lastChangelogVersion": "0.70.6",
+  "lastChangelogVersion": "0.73.0",
   "defaultProvider": "llama-cpp",
-  "defaultModel": "Qwen3.6-35B-A3B-GGUF",
-  "defaultThinkingLevel": "medium",
+  "defaultModel": "NVIDIA-Nemotron-3-Nano-4B-GGUF",
+  "defaultThinkingLevel": "high",
   "enabledModels": [
-    "anthropic/claude-sonnet-4-6",
-    "anthropic/claude-sonnet-4-5-20250929",
-    "anthropic/claude-sonnet-4-5",
-    "anthropic/claude-sonnet-4-20250514"
+    "NVIDIA-Nemotron-3-Nano-4B-GGUF",
+    "Qwen3.5-4B-Claude-4.6-Opus-Reasoning-Distilled-GGUF"
   ],
   "theme": "light",
   "packages": [
