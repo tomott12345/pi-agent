@@ -1,14 +1,16 @@
 {
-  "lastChangelogVersion": "0.73.0",
+  "lastChangelogVersion": "0.76.0",
   "defaultProvider": "llama-cpp",
-  "defaultModel": "NVIDIA-Nemotron-3-Nano-4B-GGUF",
+  "defaultModel": "NVIDIA-Nemotron-3-Nano-Omni-30B-A3B-Reasoning-GGUF",
   "defaultThinkingLevel": "high",
   "enabledModels": [
-    "NVIDIA-Nemotron-3-Nano-4B-GGUF",
     "Qwen3.5-4B-Claude-4.6-Opus-Reasoning-Distilled-GGUF"
   ],
   "theme": "light",
   "packages": [
     "npm:tau-mirror"
-  ]
+  ],
+  "terminal": {
+    "showTerminalProgress": true
+  }
 }

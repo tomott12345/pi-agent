@@ -29,5 +29,24 @@ Generates a Substack-ready note about a specific architectural style: its histor
 - Brief history
 - Key features
 - Image link (URL to representative image)
-- Learning tip
+- Learning tip: Use these styles for your projects.
+- Gothic (Western): 12th–16th century; sub‑styles: English Gothic, French Gothic
+- Renaissance (Western): 15th–17th century; sub‑styles: Italian Renaissance, Northern Renaissance
+- Baroque (Western): 17th–18th century; sub‑styles: Spanish Baroque, French Baroque
+- Neoclassical (Western): 18th–19th century; sub‑styles: Greek Revival, Italianate
+- Art Deco (Western): 1920s–1940s; sub‑styles: Streamline Moderne, Zigzag Moderne
+- Modernist (Western): 1920s–1970s; sub‑styles: International Style, Brutalism
+- Brutalist (Western): 1950s–1970s; sub‑styles: British Brutalism, American Brutalism
+- Postmodernism (Western): 1970s–1990s
+- High‑tech (Western): 1970s–1980s
+- Deconstructivism (Western): 1980s–1990s
+- New Formalism (Western): 1980s
+- Japanese Metabolism (Eastern): 1960s–1970s
+- Chinese Modernism (Eastern): 1970s–1990s
+- Indian Modernism (Eastern): 1940s–1970s (continued)
+- Korean Modern (Eastern): 1970s–present
+- Japanese (Eastern): 12th–20th century; sub‑styles: Shinden‑zukuri, Edo‑period, Metabolist
+- Chinese (Eastern): 10th–20th century; sub‑styles: Ming dynasty, Qing dynasty, Shanghai Modern
+- Indian (Eastern): 16th–20th century; sub‑styles: Mughal, Rajput, Post‑Independence
+- Korean (Eastern): 14th–20th century; sub‑styles: Hanok, Joseon‑era, Korean Modernism
 ```
